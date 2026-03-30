@@ -1,0 +1,407 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Zap, Brain, Rocket, ChevronRight, Settings, Target, Cpu } from 'lucide-react';
+
+// --- COMPONENTE DEL FONDO INTERACTIVO (CORTE LÁSER CNC) ---
+const LaserCuttingBackground = () => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    let animationFrameId;
+    let particles = [];
+    const mouse = { x: -1000, y: -1000, active: false };
+    let scanLineY = 0;
+
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+
+    // --- LÓGICA DE PARTÍCULAS (PLASMA/CHISPAS DE CORTE) ---
+    class PlasmaSpark {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 4 + 2;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.life = 1;
+        this.size = Math.random() * 2 + 1;
+        this.color = Math.random() > 0.5 ? '#ff8c00' : '#ffffff';
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= 0.03;
+        this.size *= 0.95;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    const handleMouseMove = (e) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+      mouse.active = true;
+
+      // Generar partículas de plasma en el punto de impacto
+      for (let i = 0; i < 3; i++) {
+        particles.push(new PlasmaSpark(mouse.x, mouse.y));
+      }
+    };
+
+    const handleMouseLeave = () => {
+      mouse.active = false;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    const drawGrid = () => {
+      ctx.strokeStyle = 'rgba(255, 140, 0, 0.05)';
+      ctx.lineWidth = 1;
+      const step = 40;
+      
+      for (let x = 0; x < canvas.width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+    };
+
+    const animate = () => {
+      ctx.fillStyle = '#050505';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      drawGrid();
+
+      // Dibujar línea de escaneo horizontal
+      scanLineY = (scanLineY + 2) % canvas.height;
+      const scanGradient = ctx.createLinearGradient(0, scanLineY - 50, 0, scanLineY + 50);
+      scanGradient.addColorStop(0, 'rgba(255, 140, 0, 0)');
+      scanGradient.addColorStop(0.5, 'rgba(255, 140, 0, 0.15)');
+      scanGradient.addColorStop(1, 'rgba(255, 140, 0, 0)');
+      ctx.fillStyle = scanGradient;
+      ctx.fillRect(0, scanLineY - 50, canvas.width, 100);
+      
+      ctx.strokeStyle = 'rgba(255, 140, 0, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, scanLineY);
+      ctx.lineTo(canvas.width, scanLineY);
+      ctx.stroke();
+
+      // Dibujar Haces Láser desde las esquinas al cursor
+      if (mouse.active) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ff8c00';
+        ctx.strokeStyle = 'rgba(255, 140, 0, 0.6)';
+        ctx.lineWidth = 2;
+
+        const corners = [
+          { x: 0, y: 0 },
+          { x: canvas.width, y: 0 },
+          { x: 0, y: canvas.height },
+          { x: canvas.width, y: canvas.height }
+        ];
+
+        corners.forEach(corner => {
+          ctx.beginPath();
+          ctx.moveTo(corner.x, corner.y);
+          ctx.lineTo(mouse.x, mouse.y);
+          ctx.stroke();
+        });
+
+        // Punto de impacto central (núcleo láser)
+        ctx.beginPath();
+        ctx.arc(mouse.x, mouse.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Actualizar y dibujar partículas
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].life <= 0) {
+          particles.splice(i, 1);
+        } else {
+          particles[i].draw();
+        }
+      }
+      
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('resize', resizeCanvas);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fixed top-0 left-0 w-full h-full pointer-events-none z-0"
+      style={{ background: '#050505' }}
+    />
+  );
+};
+
+// --- COMPONENTE DEL CURSOR PERSONALIZADO ---
+const CustomCursor = () => {
+  const [position, setPosition] = useState({ x: -100, y: -100 });
+  const [isHovering, setIsHovering] = useState(false);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      setIsTouchDevice(true);
+      return;
+    }
+
+    const onMouseMove = (e) => {
+      setPosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+
+    const handleMouseOver = (e) => {
+      if (e.target.closest('button') || e.target.closest('a') || e.target.classList.contains('interactive-hover')) {
+        setIsHovering(true);
+      } else {
+        setIsHovering(false);
+      }
+    };
+
+    window.addEventListener('mouseover', handleMouseOver);
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseover', handleMouseOver);
+    };
+  }, []);
+
+  if (isTouchDevice) return null;
+
+  return (
+    <>
+      <style>{`
+        @media (hover: hover) and (pointer: fine) {
+          * { cursor: none !important; }
+        }
+      `}</style>
+      
+      {/* Mira telescópica del láser */}
+      <div 
+        className="fixed top-0 left-0 w-8 h-8 border border-[#ff8c00] rounded-full pointer-events-none z-[9999] transition-transform duration-100 ease-out"
+        style={{ 
+          transform: `translate(${position.x - 16}px, ${position.y - 16}px) scale(${isHovering ? 1.5 : 1})`,
+        }}
+      >
+        <div className="absolute top-1/2 left-0 w-full h-[1px] bg-[#ff8c00] opacity-50"></div>
+        <div className="absolute left-1/2 top-0 w-[1px] h-full bg-[#ff8c00] opacity-50"></div>
+      </div>
+
+      {/* Punto de calor central */}
+      <div 
+        className="fixed top-0 left-0 w-1.5 h-1.5 bg-white rounded-full pointer-events-none z-[10000] shadow-[0_0_10px_#ff8c00]"
+        style={{ 
+          transform: `translate(${position.x - 3}px, ${position.y - 3}px)`,
+        }}
+      />
+    </>
+  );
+};
+
+// --- APLICACIÓN PRINCIPAL ---
+export default function App() {
+  const [navLogoError, setNavLogoError] = useState(false);
+  const [heroLogoError, setHeroLogoError] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-[#050505] text-white overflow-x-hidden font-sans selection:bg-[#ff8c00] selection:text-white">
+      <CustomCursor />
+      <LaserCuttingBackground />
+
+      {/* Navegación Técnica */}
+      <nav className="relative z-10 flex justify-between items-center px-8 md:px-16 py-6 backdrop-blur-sm bg-black/40 border-b border-[#ff8c00]/20">
+        <div className="flex items-center gap-3 interactive-hover group">
+          <div className="relative">
+            {!navLogoError ? (
+              <img 
+                src="logo final fabricando ideas.jpg" 
+                alt="Fabricando Ideas Logo" 
+                className="h-12 w-auto object-contain transition-transform duration-300 drop-shadow-[0_0_10px_rgba(255,140,0,0.3)]"
+                onError={() => setNavLogoError(true)}
+              />
+            ) : (
+              <div className="flex items-center gap-2 text-[#ff8c00] font-bold text-2xl tracking-tighter uppercase italic pr-4">
+                <Settings className="w-8 h-8 animate-spin-slow" />
+              </div>
+            )}
+            {/* Escaneo sobre el logo */}
+            <div className="absolute top-0 left-0 w-full h-0.5 bg-[#ff8c00] shadow-[0_0_10px_#ff8c00] animate-scan-logo"></div>
+          </div>
+          <div className="hidden items-center gap-2 text-[#ff8c00] font-bold text-2xl tracking-tighter uppercase italic">
+            <span>fabricando ideas</span>
+          </div>
+        </div>
+        
+        <div className="hidden md:flex gap-10 text-[10px] font-black tracking-[0.2em] text-gray-400 uppercase">
+          <a href="#lab" className="hover:text-white transition-colors flex items-center gap-2 group">
+            <Target className="w-3 h-3 text-[#ff8c00] group-hover:animate-pulse" />
+            Laboratorio
+          </a>
+          <a href="#proceso" className="hover:text-white transition-colors flex items-center gap-2 group">
+            <Cpu className="w-3 h-3 text-[#ff8c00]" />
+            Procesamiento
+          </a>
+          <a href="#output" className="hover:text-white transition-colors flex items-center gap-2 group">
+            <Zap className="w-3 h-3 text-[#ff8c00]" />
+            Resultados
+          </a>
+        </div>
+
+        <button className="interactive-hover px-6 py-2 bg-transparent border border-[#ff8c00] text-[#ff8c00] font-bold text-[10px] uppercase tracking-widest hover:bg-[#ff8c00] hover:text-black transition-all">
+          Iniciar Escaneo
+        </button>
+      </nav>
+
+      {/* Sección Hero: Precisión Extrema */}
+      <main className="relative z-10 flex flex-col items-center justify-center min-h-[85vh] px-4 text-center">
+        
+        <div className="relative mb-10 group interactive-hover">
+          {/* Aura de calor láser */}
+          <div className="absolute inset-0 bg-[#ff8c00] blur-[150px] opacity-10 group-hover:opacity-30 transition-opacity duration-1000"></div>
+          
+          {!heroLogoError ? (
+            <img 
+              src="logo final fabricando ideas.jpg" 
+              alt="Fabricando Ideas Logo Principal" 
+              className="relative h-64 md:h-80 w-auto object-contain transition-all duration-700 drop-shadow-[0_10px_40px_rgba(0,0,0,0.9)]"
+              onError={() => setHeroLogoError(true)}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center bg-zinc-900/50 p-12 rounded-full border border-white/10 backdrop-blur-md">
+              <Settings className="w-32 h-32 text-[#ff8c00] mb-4 animate-spin-slow drop-shadow-[0_0_15px_rgba(255,140,0,0.8)]" />
+              <span className="font-serif italic lowercase text-6xl text-[#ff8c00]">fabricando ideas</span>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-4 flex items-center gap-4 text-[#ff8c00] font-mono text-xs tracking-widest opacity-60">
+          <span className="h-[1px] w-12 bg-[#ff8c00]"></span>
+          PRECISIÓN DIGITAL 99.9%
+          <span className="h-[1px] w-12 bg-[#ff8c00]"></span>
+        </div>
+
+        <h1 className="text-6xl md:text-9xl font-black tracking-tighter mb-6 max-w-6xl leading-[0.85] uppercase italic">
+          Corte <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff8c00] to-white">Láser</span><br/>
+          de Conceptos
+        </h1>
+        
+        <p className="text-gray-400 text-lg md:text-xl max-w-2xl mb-12 font-light leading-relaxed tracking-wide italic">
+          Fabricamos soluciones digitales con la exactitud de un haz de luz concentrado. Sin rebabas, sin errores, solo perfección.
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          <button className="interactive-hover relative group px-12 py-5 bg-[#ff8c00] text-black font-black text-sm uppercase tracking-widest overflow-hidden">
+            <div className="absolute top-0 left-[-100%] w-full h-full bg-white/30 skew-x-[-20deg] group-hover:left-[100%] transition-all duration-500"></div>
+            Cortar Proyecto
+          </button>
+          
+          <button className="interactive-hover px-12 py-5 bg-transparent border-2 border-white/10 text-white font-black text-sm uppercase tracking-widest hover:border-[#ff8c00] hover:text-[#ff8c00] transition-all">
+            Ver Muestrario
+          </button>
+        </div>
+      </main>
+
+      {/* Sección Técnica */}
+      <section className="relative z-10 bg-black/60 backdrop-blur-xl border-t border-[#ff8c00]/10 py-32 px-8 md:px-16">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-16">
+          
+          <div className="interactive-hover group">
+            <div className="w-12 h-12 mb-8 relative">
+              <Target className="w-12 h-12 text-[#ff8c00] group-hover:scale-110 transition-transform" />
+              <div className="absolute inset-0 border border-[#ff8c00] animate-ping opacity-20"></div>
+            </div>
+            <h3 className="text-xl font-black uppercase mb-4 tracking-widest italic">Punto Focal</h3>
+            <p className="text-gray-500 font-medium leading-relaxed border-l border-[#ff8c00]/30 pl-4">Concentramos todo nuestro potencial creativo en los objetivos críticos de tu negocio.</p>
+          </div>
+
+          <div className="interactive-hover group">
+            <div className="w-12 h-12 mb-8">
+              <Cpu className="w-12 h-12 text-[#ff8c00] group-hover:rotate-90 transition-transform duration-500" />
+            </div>
+            <h3 className="text-xl font-black uppercase mb-4 tracking-widest italic">Grabado CNC</h3>
+            <p className="text-gray-500 font-medium leading-relaxed border-l border-[#ff8c00]/30 pl-4">Cada línea de código es procesada con algoritmos de alta eficiencia para un rendimiento óptimo.</p>
+          </div>
+
+          <div className="interactive-hover group">
+            <div className="w-12 h-12 mb-8">
+              <Zap className="w-12 h-12 text-[#ff8c00] group-hover:animate-pulse" />
+            </div>
+            <h3 className="text-xl font-black uppercase mb-4 tracking-widest italic">Haz de Alta Potencia</h3>
+            <p className="text-gray-500 font-medium leading-relaxed border-l border-[#ff8c00]/30 pl-4">Potenciamos tu marca con interfaces de usuario que brillan con luz propia en el mercado.</p>
+          </div>
+
+        </div>
+      </section>
+      
+      {/* Footer de Consola */}
+      <footer className="relative z-10 border-t border-white/5 py-12 text-center bg-black font-mono text-[10px] tracking-widest text-gray-600">
+        <div className="flex justify-center gap-8 mb-4">
+          <span className="flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> LASER_READY</span>
+          <span className="flex items-center gap-2"><span className="w-2 h-2 bg-red-500 rounded-full"></span> SYSTEM_ARMED</span>
+        </div>
+        <p>© 2026 FABRICANDO IDEAS // CNC_TERM_ID: 0x4F92 // BUILT_FOR_PRECISION</p>
+      </footer>
+
+      <style>{`
+        @keyframes scan-logo {
+          0% { top: 0%; opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { top: 100%; opacity: 0; }
+        }
+        .animate-scan-logo {
+          animation: scan-logo 3s ease-in-out infinite;
+        }
+        .animate-spin-slow {
+          animation: spin 8s linear infinite;
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
