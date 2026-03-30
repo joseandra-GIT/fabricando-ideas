@@ -1,3 +1,14 @@
+/**
+ * GUÍA PARA PUBLICAR EN GITHUB:
+ * * 1. Asegúrate de tener instalado 'lucide-react':
+ * Ejecuta: npm install lucide-react
+ * * 2. Tailwind CSS debe estar configurado en tu proyecto.
+ * * 3. IMÁGENES: El archivo "logo final fabricando ideas.jpg" debe estar 
+ * dentro de la carpeta 'public' de tu proyecto.
+ * RECOMENDACIÓN: Renombra el archivo a 'logo.jpg' (sin espacios) 
+ * para evitar errores de ruta en servidores de GitHub.
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Zap, Brain, Rocket, ChevronRight, Settings, Target, Cpu } from 'lucide-react';
 
@@ -41,7 +52,7 @@ const LaserCuttingBackground = () => {
       }
       draw() {
         ctx.save();
-        ctx.globalAlpha = this.life;
+        ctx.globalAlpha = Math.max(0, this.life);
         ctx.shadowBlur = 10;
         ctx.shadowColor = this.color;
         ctx.fillStyle = this.color;
@@ -57,7 +68,6 @@ const LaserCuttingBackground = () => {
       mouse.y = e.clientY;
       mouse.active = true;
 
-      // Generar partículas de plasma en el punto de impacto
       for (let i = 0; i < 3; i++) {
         particles.push(new PlasmaSpark(mouse.x, mouse.y));
       }
@@ -92,28 +102,39 @@ const LaserCuttingBackground = () => {
     };
 
     const animate = () => {
+      if (!canvas.height || canvas.height === 0) {
+        animationFrameId = requestAnimationFrame(animate);
+        return;
+      }
+
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
       drawGrid();
 
-      // Dibujar línea de escaneo horizontal
+      // Cálculo seguro de la línea de escaneo
       scanLineY = (scanLineY + 2) % canvas.height;
-      const scanGradient = ctx.createLinearGradient(0, scanLineY - 50, 0, scanLineY + 50);
-      scanGradient.addColorStop(0, 'rgba(255, 140, 0, 0)');
-      scanGradient.addColorStop(0.5, 'rgba(255, 140, 0, 0.15)');
-      scanGradient.addColorStop(1, 'rgba(255, 140, 0, 0)');
-      ctx.fillStyle = scanGradient;
-      ctx.fillRect(0, scanLineY - 50, canvas.width, 100);
       
-      ctx.strokeStyle = 'rgba(255, 140, 0, 0.3)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, scanLineY);
-      ctx.lineTo(canvas.width, scanLineY);
-      ctx.stroke();
+      const gStart = scanLineY - 50;
+      const gEnd = scanLineY + 50;
 
-      // Dibujar Haces Láser desde las esquinas al cursor
+      // Validación de valores finitos para evitar errores en createLinearGradient
+      if (Number.isFinite(gStart) && Number.isFinite(gEnd)) {
+        const scanGradient = ctx.createLinearGradient(0, gStart, 0, gEnd);
+        scanGradient.addColorStop(0, 'rgba(255, 140, 0, 0)');
+        scanGradient.addColorStop(0.5, 'rgba(255, 140, 0, 0.15)');
+        scanGradient.addColorStop(1, 'rgba(255, 140, 0, 0)');
+        ctx.fillStyle = scanGradient;
+        ctx.fillRect(0, gStart, canvas.width, 100);
+        
+        ctx.strokeStyle = 'rgba(255, 140, 0, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, scanLineY);
+        ctx.lineTo(canvas.width, scanLineY);
+        ctx.stroke();
+      }
+
       if (mouse.active) {
         ctx.shadowBlur = 15;
         ctx.shadowColor = '#ff8c00';
@@ -134,7 +155,6 @@ const LaserCuttingBackground = () => {
           ctx.stroke();
         });
 
-        // Punto de impacto central (núcleo láser)
         ctx.beginPath();
         ctx.arc(mouse.x, mouse.y, 4, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
@@ -142,7 +162,6 @@ const LaserCuttingBackground = () => {
         ctx.shadowBlur = 0;
       }
 
-      // Actualizar y dibujar partículas
       for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].update();
         if (particles[i].life <= 0) {
@@ -193,7 +212,8 @@ const CustomCursor = () => {
     window.addEventListener('mousemove', onMouseMove);
 
     const handleMouseOver = (e) => {
-      if (e.target.closest('button') || e.target.closest('a') || e.target.classList.contains('interactive-hover')) {
+      const target = e.target;
+      if (target && (target.closest('button') || target.closest('a') || target.classList.contains('interactive-hover'))) {
         setIsHovering(true);
       } else {
         setIsHovering(false);
@@ -218,7 +238,6 @@ const CustomCursor = () => {
         }
       `}</style>
       
-      {/* Mira telescópica del láser */}
       <div 
         className="fixed top-0 left-0 w-8 h-8 border border-[#ff8c00] rounded-full pointer-events-none z-[9999] transition-transform duration-100 ease-out"
         style={{ 
@@ -229,7 +248,6 @@ const CustomCursor = () => {
         <div className="absolute left-1/2 top-0 w-[1px] h-full bg-[#ff8c00] opacity-50"></div>
       </div>
 
-      {/* Punto de calor central */}
       <div 
         className="fixed top-0 left-0 w-1.5 h-1.5 bg-white rounded-full pointer-events-none z-[10000] shadow-[0_0_10px_#ff8c00]"
         style={{ 
@@ -245,6 +263,9 @@ export default function App() {
   const [navLogoError, setNavLogoError] = useState(false);
   const [heroLogoError, setHeroLogoError] = useState(false);
 
+  // NOTA: Si usas GitHub Pages, asegúrate de que la ruta sea correcta.
+  const logoPath = "logo final fabricando ideas.jpg";
+
   return (
     <div className="min-h-screen bg-[#050505] text-white overflow-x-hidden font-sans selection:bg-[#ff8c00] selection:text-white">
       <CustomCursor />
@@ -256,7 +277,7 @@ export default function App() {
           <div className="relative">
             {!navLogoError ? (
               <img 
-                src="logo final fabricando ideas.jpg" 
+                src={logoPath}
                 alt="Fabricando Ideas Logo" 
                 className="h-12 w-auto object-contain transition-transform duration-300 drop-shadow-[0_0_10px_rgba(255,140,0,0.3)]"
                 onError={() => setNavLogoError(true)}
@@ -266,7 +287,6 @@ export default function App() {
                 <Settings className="w-8 h-8 animate-spin-slow" />
               </div>
             )}
-            {/* Escaneo sobre el logo */}
             <div className="absolute top-0 left-0 w-full h-0.5 bg-[#ff8c00] shadow-[0_0_10px_#ff8c00] animate-scan-logo"></div>
           </div>
           <div className="hidden items-center gap-2 text-[#ff8c00] font-bold text-2xl tracking-tighter uppercase italic">
@@ -294,16 +314,14 @@ export default function App() {
         </button>
       </nav>
 
-      {/* Sección Hero: Precisión Extrema */}
       <main className="relative z-10 flex flex-col items-center justify-center min-h-[85vh] px-4 text-center">
         
         <div className="relative mb-10 group interactive-hover">
-          {/* Aura de calor láser */}
           <div className="absolute inset-0 bg-[#ff8c00] blur-[150px] opacity-10 group-hover:opacity-30 transition-opacity duration-1000"></div>
           
           {!heroLogoError ? (
             <img 
-              src="logo final fabricando ideas.jpg" 
+              src={logoPath}
               alt="Fabricando Ideas Logo Principal" 
               className="relative h-64 md:h-80 w-auto object-contain transition-all duration-700 drop-shadow-[0_10px_40px_rgba(0,0,0,0.9)]"
               onError={() => setHeroLogoError(true)}
@@ -343,10 +361,8 @@ export default function App() {
         </div>
       </main>
 
-      {/* Sección Técnica */}
       <section className="relative z-10 bg-black/60 backdrop-blur-xl border-t border-[#ff8c00]/10 py-32 px-8 md:px-16">
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-16">
-          
           <div className="interactive-hover group">
             <div className="w-12 h-12 mb-8 relative">
               <Target className="w-12 h-12 text-[#ff8c00] group-hover:scale-110 transition-transform" />
@@ -355,7 +371,6 @@ export default function App() {
             <h3 className="text-xl font-black uppercase mb-4 tracking-widest italic">Punto Focal</h3>
             <p className="text-gray-500 font-medium leading-relaxed border-l border-[#ff8c00]/30 pl-4">Concentramos todo nuestro potencial creativo en los objetivos críticos de tu negocio.</p>
           </div>
-
           <div className="interactive-hover group">
             <div className="w-12 h-12 mb-8">
               <Cpu className="w-12 h-12 text-[#ff8c00] group-hover:rotate-90 transition-transform duration-500" />
@@ -363,7 +378,6 @@ export default function App() {
             <h3 className="text-xl font-black uppercase mb-4 tracking-widest italic">Grabado CNC</h3>
             <p className="text-gray-500 font-medium leading-relaxed border-l border-[#ff8c00]/30 pl-4">Cada línea de código es procesada con algoritmos de alta eficiencia para un rendimiento óptimo.</p>
           </div>
-
           <div className="interactive-hover group">
             <div className="w-12 h-12 mb-8">
               <Zap className="w-12 h-12 text-[#ff8c00] group-hover:animate-pulse" />
@@ -371,11 +385,9 @@ export default function App() {
             <h3 className="text-xl font-black uppercase mb-4 tracking-widest italic">Haz de Alta Potencia</h3>
             <p className="text-gray-500 font-medium leading-relaxed border-l border-[#ff8c00]/30 pl-4">Potenciamos tu marca con interfaces de usuario que brillan con luz propia en el mercado.</p>
           </div>
-
         </div>
       </section>
       
-      {/* Footer de Consola */}
       <footer className="relative z-10 border-t border-white/5 py-12 text-center bg-black font-mono text-[10px] tracking-widest text-gray-600">
         <div className="flex justify-center gap-8 mb-4">
           <span className="flex items-center gap-2"><span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> LASER_READY</span>
